@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { api } from '../services/api';
 
 export const Checkout = ({ carrito, setCarrito, setOrdenActual }) => {
   const navigate = useNavigate();
@@ -46,23 +47,46 @@ export const Checkout = ({ carrito, setCarrito, setOrdenActual }) => {
 
   const handleChange = (e) => setFormData({ ...formData, [e.target.name]: e.target.value });
 
-  const handlePagar = (e) => {
+  const handlePagar = async (e) => {
     e.preventDefault();
-    const nuevaOrden = {
-      nroOrden: `#${Math.floor(100000 + Math.random() * 900000)}`,
-      cliente: formData,
-      items: carrito,
-      total
-    };
 
-    setOrdenActual(nuevaOrden);
-
-    // Simulación de pasarela de pago (90% éxito / 10% fallo)
+    // Simulación de pasarela de pago (en esta versión: ~60% éxito / 40% fallo)
     const exito = Math.random() > 0.4;
-    if (exito) {
+    if (!exito) {
+      navigate('/pago-error');
+      return;
+    }
+
+    try {
+      // Guardar la orden en el backend solo si el pago fue exitoso
+      const sesion = JSON.parse(localStorage.getItem('usuarioSesion'));
+      const direccion = [formData.calle, formData.depto, formData.comuna, formData.region]
+        .filter(Boolean)
+        .join(', ');
+
+      const ordenCreada = await api.crearOrden({
+        cliente: `${formData.nombre} ${formData.apellidos}`.trim(),
+        correo: formData.correo,
+        rut: sesion?.run || '',
+        direccion,
+        metodoPago: 'WebPay (Tarjeta Crédito)',
+        productos: carrito.map((item) => ({
+          productoId: String(item.id),
+          nombre: item.nombre,
+          precio: item.precio,
+          cantidad: item.cantidad || 1
+        }))
+      });
+
+      setOrdenActual({
+        nroOrden: ordenCreada.codigo,
+        cliente: formData,
+        items: carrito,
+        total: ordenCreada.total
+      });
       setCarrito([]); // Vaciar carrito tras compra exitosa
       navigate('/pago-exitoso');
-    } else {
+    } catch {
       navigate('/pago-error');
     }
   };

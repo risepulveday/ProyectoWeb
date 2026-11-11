@@ -1,74 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-
-const productosEquiposBase = [
-  {
-    id: 'eq-1',
-    nombre: 'Amplificador de Guitarra Marshall',
-    descripcion: 'Amplificador de alta fidelidad, con tono cálido, distorsión clásica y potencia ideal para ensayos y estudio.',
-    precio: 399990,
-    imagen: '/img/amplificadorMarshall.jpg',
-  },
-  {
-    id: 'eq-2',
-    nombre: 'Micrófono de Condensador',
-    descripcion: 'Micrófono de estudio profesional con patrón polar cardioide, excelente claridad para voces y podcasts.',
-    precio: 149990,
-    imagen: '/img/microfonopro.jpg',
-  },
-  {
-    id: 'eq-3',
-    nombre: 'Controladora DJ Pro',
-    descripcion: 'Sistema todo en uno de 2 canales, con pads retroiluminados, jog wheels de precisión y pantalla integrada.',
-    precio: 399990,
-    imagen: '/img/tornamesa.jpg',
-  },
-  {
-    id: 'eq-4',
-    nombre: 'Parlante de P.A. Profesional',
-    descripcion: 'Monitor de sonido de alta potencia con respuesta limpia de bajos, ideal para eventos e instalaciones en vivo.',
-    precio: 199990,
-    imagen: '/img/parlantejbl.jpg',
-  },
-  {
-    id: 'eq-5',
-    nombre: 'Tornamesa Estéreo Retro',
-    descripcion: 'Reproductor estilo vintage con altavoces integrados, radio FM y velocidad ajustable para vinilos de 33/45 RPM.',
-    precio: 99990,
-    imagen: '/img/tocadiscos.jpg',
-  },
-  {
-    id: 'eq-6',
-    nombre: 'Parlantes Monitor Audio Bronze',
-    descripcion: 'Diseño compacto de 2 vías con sonido cálido y de alta resolución para vinilos.',
-    precio: 149990,
-    imagen: '/img/parlante2.jpg',
-  },
-];
+import { api } from '../services/api';
 
 export const Equipos = ({ agregarAlCarrito }) => {
   const [toast, setToast] = useState('');
 
-  // Sincronización con productos creados/editados en Admin
-  const [listaEquipos, setListaEquipos] = useState(() => {
-    const productosAdmin = localStorage.getItem('adminProductos');
-    if (productosAdmin) {
-      const parsed = JSON.parse(productosAdmin);
-      const equiposFiltrados = parsed.filter(p => p.categoria === 'equipos' || String(p.id).startsWith('eq-'));
-      return equiposFiltrados.length > 0 ? equiposFiltrados : productosEquiposBase;
-    }
-    return productosEquiposBase;
-  });
+  // Equipos desde el backend
+  const [listaEquipos, setListaEquipos] = useState([]);
+  const [error, setError] = useState('');
 
   useEffect(() => {
-    const productosAdmin = localStorage.getItem('adminProductos');
-    if (productosAdmin) {
-      const parsed = JSON.parse(productosAdmin);
-      const equiposFiltrados = parsed.filter(p => p.categoria === 'equipos' || String(p.id).startsWith('eq-'));
-      if (equiposFiltrados.length > 0) {
-        setListaEquipos(equiposFiltrados);
-      }
-    }
+    api.productos('equipos')
+      .then(setListaEquipos)
+      .catch((e) => setError(e.message));
   }, []);
 
   const handleAgregar = (producto) => {
@@ -117,6 +61,8 @@ export const Equipos = ({ agregarAlCarrito }) => {
         <h1 className="display-5 fw-bold text-uppercase">Tornamesas & Equipos de Audio</h1>
         <p className="lead text-white-50">Lleva la alta fidelidad del sonido análogo a tu hogar.</p>
       </header>
+
+      {error && <div className="alert alert-danger text-center">{error}</div>}
 
       {/* Grid de Productos */}
       <div className="row g-4">

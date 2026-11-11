@@ -1,20 +1,32 @@
 import { render, screen, fireEvent } from '@testing-library/react';
 import { BrowserRouter } from 'react-router-dom';
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { Equipos } from './Equipos';
+import { api } from '../services/api';
+
+vi.mock('../services/api', async (importOriginal) => {
+  const actual = await importOriginal();
+  return { ...actual, api: { ...actual.api, productos: vi.fn() } };
+});
 
 const renderWithRouter = (ui) => render(<BrowserRouter>{ui}</BrowserRouter>);
 
 describe('Prueba Unitaria - Vista Equipos', () => {
-  it('debe llamar a la función agregarAlCarrito al presionar Añadir al Carrito', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    api.productos.mockResolvedValue([
+      { id: 'eq-1', titulo: 'Amplificador de Guitarra Marshall', categoria: 'equipos', precio: 399990, imagen: '/img/amplificadorMarshall.jpg', descripcion: 'Amplificador de prueba' },
+    ]);
+  });
+
+  it('debe llamar a la función agregarAlCarrito al presionar Añadir al Carrito', async () => {
     const mockAgregar = vi.fn();
     renderWithRouter(<Equipos agregarAlCarrito={mockAgregar} />);
 
-    // Buscar todos los botones de "Añadir al Carrito" y hacer clic en el primero
-    const botonesAgregar = screen.getAllByRole('button', { name: /Añadir al Carrito/i });
+    // Esperar a que los equipos lleguen desde la API
+    const botonesAgregar = await screen.findAllByRole('button', { name: /Añadir al Carrito/i });
     fireEvent.click(botonesAgregar[0]);
 
-    // Verificar que la función fue ejecutada
     expect(mockAgregar).toHaveBeenCalledTimes(1);
   });
 });

@@ -1,92 +1,37 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { albumes } from '../data/albumesData';
+import { api, normalizarProducto } from '../services/api';
 
-// Lista de equipos de sonido
-const productosEquipos = [
-  {
-    id: 'eq-1',
-    categoria: 'equipos',
-    nombre: 'Amplificador de Guitarra Marshall',
-    precio: 399990,
-    imagen: '/img/amplificadorMarshall.jpg',
-    sku: 'AUDIO-MARSHALL-50W',
-    descripcion: 'Amplificador de alta fidelidad; con tono cálido, distorsión clásica y potencia ideal para ensayos y estudio.',
-    stock: 8,
-  },
-  {
-    id: 'eq-2',
-    categoria: 'equipos',
-    nombre: 'Micrófono de Condensador',
-    precio: 149990,
-    imagen: '/img/microfonopro.jpg',
-    sku: 'MIC-COND-PRO',
-    descripcion: 'Micrófono profesional de condensador, captura sonidos nítidos y detallados para grabaciones de voz e instrumentos.',
-    stock: 12,
-  },
-  {
-    id: 'eq-3',
-    categoria: 'equipos',
-    nombre: 'Controladora DJ Pro',
-    precio: 399990,
-    imagen: '/img/tornamesa.jpg',
-    sku: 'DJ-CTRL-PRO',
-    descripcion: 'Controladora DJ con jogwheels de alta precisión y mezcla multicanal integrada.',
-    stock: 5,
-  },
-  {
-    id: 'eq-4',
-    categoria: 'equipos',
-    nombre: 'Parlante de P.A. Profesional',
-    precio: 199990,
-    imagen: '/img/parlantejbl.jpg',
-    sku: 'SPK-PA-PRO',
-    descripcion: 'Parlante activo de alta potencia ideal para eventos y presentaciones en vivo.',
-    stock: 10,
-  },
-  {
-    id: 'eq-5',
-    categoria: 'equipos',
-    nombre: 'Tornamesa Estéreo Retro Hi-Fi',
-    precio: 99990,
-    imagen: '/img/tocadiscos.jpg',
-    sku: 'TRN-RETRO-HIFI',
-    descripcion: 'Tornamesa estilo retro con reproducción a varias velocidades y salida RCA/Bluetooth.',
-    stock: 7,
-  },
-  {
-    id: 'eq-6',
-    categoria: 'equipos',
-    nombre: 'Parlantes Monitor Audio Bronze',
-    precio: 149990,
-    imagen: '/img/parlante2.jpg',
-    sku: 'SPK-MONITOR-BRZ',
-    descripcion: 'Monitores de estudio con excelente respuesta de frecuencia para mezcla y producción.',
-    stock: 4,
-  },
-];
+// Adapta el producto del backend a lo que muestra la vista de detalle
+const adaptarProducto = (p) => ({
+  ...normalizarProducto(p),
+  sku: `${p.categoria === 'vinilos' ? 'VINILO' : String(p.categoria || 'PROD').toUpperCase()}-${String(p.id).toUpperCase()}`,
+  descripcion:
+    p.descripcion ||
+    (p.categoria === 'vinilos'
+      ? `Álbum oficial de ${p.artista}, edición especial en vinilo.`
+      : 'Producto de alta fidelidad de MusicMania.'),
+  stock: p.stock ?? 10,
+});
 
 export const DetalleProducto = ({ agregarAlCarrito }) => {
   const { id } = useParams();
   const navigate = useNavigate();
   const [toast, setToast] = useState('');
 
-  // Unificar álbumes y equipos en una sola lista para buscar por ID
-  const todosLosProductos = [
-    ...albumes.map((alb) => ({
-      id: alb.id,
-      nombre: `${alb.titulo} - ${alb.artista}`,
-      precio: alb.precio,
-      imagen: alb.imagen,
-      sku: `VINILO-${alb.id.toUpperCase()}`,
-      descripcion: alb.descripcion || `Álbum oficial de ${alb.artista}, edición especial en vinilo.`,
-      stock: alb.stock || 10,
-    })),
-    ...productosEquipos,
-  ];
+  // Cargar el producto desde el backend según el ID de la URL
+  const [producto, setProducto] = useState(null);
+  const [cargando, setCargando] = useState(true);
 
-  // Buscar el producto que coincida con el ID de la URL
-  const producto = todosLosProductos.find((prod) => prod.id === id);
+  useEffect(() => {
+    let activo = true;
+    setCargando(true);
+    api.producto(id)
+      .then((p) => { if (activo) setProducto(adaptarProducto(p)); })
+      .catch(() => { if (activo) setProducto(null); })
+      .finally(() => { if (activo) setCargando(false); });
+    return () => { activo = false; };
+  }, [id]);
 
   // Manejar el clic en "Añadir al Carrito"
   const handleAgregar = () => {
@@ -105,6 +50,14 @@ export const DetalleProducto = ({ agregarAlCarrito }) => {
       setTimeout(() => setToast(''), 3000);
     }
   };
+
+  if (cargando) {
+    return (
+      <main className="container py-5 text-center text-white">
+        <p>Cargando producto...</p>
+      </main>
+    );
+  }
 
   if (!producto) {
     return (

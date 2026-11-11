@@ -1,25 +1,34 @@
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { DetalleResena } from './DetalleResena';
+import { api } from '../services/api';
 
-describe('Prueba Unitaria - Vista DetalleResena y Persistencia en LocalStorage', () => {
-  
-  // 1. LIMPIEZA Y PREPARACIÓN DEL ENTORNOS
+vi.mock('../services/api', async (importOriginal) => {
+  const actual = await importOriginal();
+  return {
+    ...actual,
+    api: { ...actual.api, usuarios: vi.fn(), resenas: vi.fn(), crearResena: vi.fn() }
+  };
+});
+
+describe('Prueba Unitaria - Vista DetalleResena conectada a la API', () => {
   beforeEach(() => {
+    vi.clearAllMocks();
     localStorage.clear();
 
-    // Simular un usuario logueado en localStorage antes de cada prueba
-    const usuarioSimulado = {
-      nombre: 'Usuario Prueba',
-      correo: 'usuario@duoc.cl',
-      rol: 'Cliente'
-    };
-    localStorage.setItem('usuarioSesion', JSON.stringify(usuarioSimulado));
+    // Usuario logueado (la sesión sigue en localStorage)
+    localStorage.setItem(
+      'usuarioSesion',
+      JSON.stringify({ nombre: 'Usuario Prueba', correo: 'usuario@duoc.cl', rol: 'Cliente' })
+    );
+
+    api.usuarios.mockResolvedValue([]);
+    api.resenas.mockResolvedValue([]);
+    api.crearResena.mockImplementation(async (r) => ({ id: 99, fecha: '2026-11-11', ...r }));
   });
 
-  it('debe permitir a un usuario publicar una reseña y verificar que se guarde en localStorage', () => {
-    // Cargar la vista con la ruta dinámica del álbum 'alb-1'
+  it('debe permitir a un usuario publicar una reseña y enviarla a la API', async () => {
     render(
       <MemoryRouter initialEntries={['/resena/alb-1']}>
         <Routes>
@@ -28,27 +37,24 @@ describe('Prueba Unitaria - Vista DetalleResena y Persistencia en LocalStorage',
       </MemoryRouter>
     );
 
-    // 2. ESCRIBIR COMENTARIO EN EL TEXTAREA
+    // Escribir comentario y publicar
     const textarea = screen.getByPlaceholderText(/¿Qué opinas de este disco\?.../i);
     fireEvent.change(textarea, { target: { value: 'Excelente álbum de culto' } });
+    fireEvent.click(screen.getByRole('button', { name: /Publicar Reseña/i }));
 
-    // 3. HACER CLIC EN EL BOTÓN PUBLICAR
-    const botonPublicar = screen.getByRole('button', { name: /Publicar Reseña/i });
-    fireEvent.click(botonPublicar);
+    // La reseña aparece en la interfaz
+    expect(await screen.findByText(/"Excelente álbum de culto"/i)).toBeInTheDocument();
 
-    // 4. VERIFICACIÓN EN LA INTERFAZ (UI)
-    expect(screen.getByText(/"Excelente álbum de culto"/i)).toBeInTheDocument();
-
-    // 5. VERIFICACIÓN EN LOCALSTORAGE
-    const resenasGuardadas = JSON.parse(localStorage.getItem('resenasComunidad'));
-    
-    expect(resenasGuardadas).not.toBeNull();
-    expect(resenasGuardadas.length).toBeGreaterThan(0);
-
-    const resenaPublicada = resenasGuardadas.find((r) => r.albumId === 'alb-1');
-    expect(resenaPublicada).toBeDefined();
-    expect(resenaPublicada.comentario).toBe('Excelente álbum de culto');
-    expect(resenaPublicada.usuarioCorreo).toBe('usuario@duoc.cl');
-    expect(resenaPublicada.usuarioNombre).toBe('Usuario Prueba');
+    // La API recibió los datos correctos
+    await waitFor(() => {
+      expect(api.crearResena).toHaveBeenCalledWith(
+        expect.objectContaining({
+          albumId: 'alb-1',
+          comentario: 'Excelente álbum de culto',
+          usuarioCorreo: 'usuario@duoc.cl',
+          usuarioNombre: 'Usuario Prueba'
+        })
+      );
+    });
   });
 });

@@ -1,44 +1,49 @@
-import React, { useState } from 'react';
-
-const categoriasIniciales = [
-  { id: 'cat-1', nombre: 'Vinilos y Álbumes', descripcion: 'Ediciones oficiales en formato vinilo y CD.', cantidad: 12 },
-  { id: 'cat-2', nombre: 'Equipos de Audio', descripcion: 'Amplificadores, tornamesas, parlantes y consolas.', cantidad: 6 },
-  { id: 'cat-3', nombre: 'Accesorios', descripcion: 'Limpiadores de vinilos, agujas y cables profesionales.', cantidad: 4 },
-];
+import React, { useState, useEffect } from 'react';
+import { api } from '../services/api';
 
 export const AdminCategorias = () => {
-  const [categorias, setCategorias] = useState(() => {
-    const guardadas = localStorage.getItem('adminCategorias');
-    return guardadas ? JSON.parse(guardadas) : categoriasIniciales;
-  });
+  const [categorias, setCategorias] = useState([]);
+  const [error, setError] = useState('');
+
+  const cargarCategorias = async () => {
+    try {
+      setCategorias(await api.categorias());
+      setError('');
+    } catch (e) {
+      setError(e.message);
+    }
+  };
+
+  useEffect(() => {
+    cargarCategorias();
+  }, []);
 
   const [nombre, setNombre] = useState('');
   const [descripcion, setDescripcion] = useState('');
 
   // Agregar nueva categoría
-  const handleAgregar = (e) => {
+  const handleAgregar = async (e) => {
     e.preventDefault();
     if (!nombre.trim()) return;
 
-    const nuevaCat = {
-      id: `cat-${Date.now()}`,
-      nombre,
-      descripcion: descripcion || 'Categoría del catálogo oficial de MusicMania.',
-      cantidad: 0
-    };
-
-    const listaActualizada = [...categorias, nuevaCat];
-    setCategorias(listaActualizada);
-    localStorage.setItem('adminCategorias', JSON.stringify(listaActualizada));
-    setNombre('');
-    setDescripcion('');
+    try {
+      await api.crearCategoria({ nombre: nombre.trim(), descripcion });
+      await cargarCategorias();
+      setNombre('');
+      setDescripcion('');
+    } catch (e2) {
+      setError(e2.message);
+    }
   };
 
   // Eliminar categoría
-  const handleEliminar = (id) => {
-    const listaFiltrada = categorias.filter((c) => c.id !== id);
-    setCategorias(listaFiltrada);
-    localStorage.setItem('adminCategorias', JSON.stringify(listaFiltrada));
+  const handleEliminar = async (id) => {
+    try {
+      await api.eliminarCategoria(id);
+      await cargarCategorias();
+    } catch (e) {
+      setError(e.message);
+    }
   };
 
   return (
@@ -51,6 +56,8 @@ export const AdminCategorias = () => {
         </div>
         <span className="badge bg-danger fs-6 px-3 py-2">{categorias.length} Categorías</span>
       </div>
+
+      {error && <div className="alert alert-danger">{error}</div>}
 
       <div className="row g-4">
         {/* Formulario de Creación */}

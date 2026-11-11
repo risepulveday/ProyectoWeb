@@ -1,17 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { resenasData } from './Resena';
-import initialResenasComunidad from '../data/resenasComunidad.json';
+import { api } from '../services/api';
 
 export const DetalleResena = () => {
   const { id } = useParams();
   const reseña = resenasData.find((item) => item.id === id);
 
-  // Reseñas comunitarias en localStorage
-  const [todasLasResenas, setTodasLasResenas] = useState(() => {
-    const guardadas = localStorage.getItem('resenasComunidad');
-    return guardadas ? JSON.parse(guardadas) : initialResenasComunidad;
-  });
+  // Reseñas comunitarias de este álbum (desde el backend)
+  const [todasLasResenas, setTodasLasResenas] = useState([]);
+  const [errorResena, setErrorResena] = useState('');
 
   // Sesión y Usuarios desde localStorage
   const [usuarioSesion, setUsuarioSesion] = useState(null);
@@ -26,22 +24,31 @@ export const DetalleResena = () => {
   const [indexCarrusel, setIndexCarrusel] = useState(0);
 
   useEffect(() => {
-    // 1. Obtener la sesión activa
+    // 1. Sesión activa (se guarda en el navegador al iniciar sesión)
     const sesionActiva = JSON.parse(localStorage.getItem('usuarioSesion'));
     if (sesionActiva) {
       setUsuarioSesion(sesionActiva);
       setNuevoUsuarioCorreo(sesionActiva.correo);
     }
 
-    // 2. Obtener usuarios registrados y filtrar al Administrador
-    const usuariosApp = JSON.parse(localStorage.getItem('usuariosApp')) || [];
-    const soloClientes = usuariosApp.filter((u) => u.rol !== 'Administrador');
-    setClientesDisponibles(soloClientes);
-
-    if (!sesionActiva && soloClientes.length > 0) {
-      setNuevoUsuarioCorreo(soloClientes[0].correo);
-    }
+    // 2. Clientes registrados (sin administradores) desde el backend
+    api.usuarios()
+      .then((usuariosApp) => {
+        const soloClientes = usuariosApp.filter((u) => u.rol !== 'Administrador');
+        setClientesDisponibles(soloClientes);
+        if (!sesionActiva && soloClientes.length > 0) {
+          setNuevoUsuarioCorreo(soloClientes[0].correo);
+        }
+      })
+      .catch(() => setClientesDisponibles([]));
   }, []);
+
+  // 3. Reseñas de la comunidad para este álbum
+  useEffect(() => {
+    api.resenas(id)
+      .then(setTodasLasResenas)
+      .catch(() => setTodasLasResenas([]));
+  }, [id]);
 
   if (!reseña) {
     return (
@@ -70,35 +77,37 @@ export const DetalleResena = () => {
     setIndexCarrusel((prev) => (prev === comunidadResenasAlbum.length - 1 ? 0 : prev + 1));
   };
 
-  // Guardar nueva reseña
-  const handleAgregarResena = (e) => {
+  // Guardar nueva reseña en el backend
+  const handleAgregarResena = async (e) => {
     e.preventDefault();
     if (!nuevoComentario.trim()) return;
 
-    const usuariosApp = JSON.parse(localStorage.getItem('usuariosApp')) || [];
     const correoFirma = usuarioSesion ? usuarioSesion.correo : nuevoUsuarioCorreo;
-    const datosUsuario = usuariosApp.find((u) => u.correo === correoFirma) || {
-      nombre: usuarioSesion ? usuarioSesion.nombre : 'Cliente Ejemplo',
-      correo: correoFirma,
-      rol: 'Cliente'
-    };
+    const datosUsuario =
+      usuarioSesion ||
+      clientesDisponibles.find((u) => u.correo === correoFirma) || {
+        nombre: 'Cliente Ejemplo',
+        correo: correoFirma,
+        rol: 'Cliente'
+      };
 
-    const nuevaResenaObj = {
-      id: Date.now(),
-      albumId: reseña.id,
-      usuarioCorreo: datosUsuario.correo,
-      usuarioNombre: datosUsuario.nombre,
-      usuarioRol: datosUsuario.rol,
-      puntuacion: Number(nuevaPuntuacion),
-      comentario: nuevoComentario,
-      fecha: new Date().toISOString().split('T')[0]
-    };
+    try {
+      const creada = await api.crearResena({
+        albumId: reseña.id,
+        usuarioCorreo: datosUsuario.correo,
+        usuarioNombre: datosUsuario.nombre,
+        usuarioRol: datosUsuario.rol,
+        puntuacion: Number(nuevaPuntuacion),
+        comentario: nuevoComentario
+      });
 
-    const listaActualizada = [nuevaResenaObj, ...todasLasResenas];
-    setTodasLasResenas(listaActualizada);
-    localStorage.setItem('resenasComunidad', JSON.stringify(listaActualizada));
-    setNuevoComentario('');
-    setIndexCarrusel(0);
+      setTodasLasResenas((prev) => [creada, ...prev]);
+      setNuevoComentario('');
+      setErrorResena('');
+      setIndexCarrusel(0);
+    } catch (error) {
+      setErrorResena(error.message);
+    }
   };
 
   const safeIndex = indexCarrusel >= comunidadResenasAlbum.length ? 0 : indexCarrusel;
@@ -180,6 +189,8 @@ export const DetalleResena = () => {
               </div>
             )}
             
+            {errorResena && <div className="alert alert-danger py-2 small mb-3">{errorResena}</div>}
+
             <div className="row g-3 mb-3">
               {!usuarioSesion && (
                 <div className="col-md-6">

@@ -1,79 +1,23 @@
-import React, { useState } from 'react';
-import { albumes } from '../data/albumesData';
-
-// Equipos base para la carga inicial
-const productosEquiposBase = [
-  {
-    id: 'eq-1',
-    titulo: 'Amplificador de Guitarra Marshall',
-    artista: 'Marshall',
-    categoria: 'equipos',
-    precio: 399990,
-    stock: 5,
-    imagen: '/img/amplificadorMarshall.jpg',
-  },
-  {
-    id: 'eq-2',
-    titulo: 'Micrófono de Condensador',
-    artista: 'Pro Audio',
-    categoria: 'equipos',
-    precio: 149990,
-    stock: 8,
-    imagen: '/img/microfonopro.jpg',
-  },
-  {
-    id: 'eq-3',
-    titulo: 'Controladora DJ Pro',
-    artista: 'Pioneer',
-    categoria: 'equipos',
-    precio: 399990,
-    stock: 3,
-    imagen: '/img/tornamesa.jpg',
-  },
-  {
-    id: 'eq-4',
-    titulo: 'Parlante de P.A. Profesional',
-    artista: 'JBL',
-    categoria: 'equipos',
-    precio: 199990,
-    stock: 6,
-    imagen: '/img/parlantejbl.jpg',
-  },
-  {
-    id: 'eq-5',
-    titulo: 'Tornamesa Estéreo Retro',
-    artista: 'Vintage Sound',
-    categoria: 'equipos',
-    precio: 99990,
-    stock: 10,
-    imagen: '/img/tocadiscos.jpg',
-  },
-  {
-    id: 'eq-6',
-    titulo: 'Parlantes Monitor Audio Bronze',
-    artista: 'Audio Bronze',
-    categoria: 'equipos',
-    precio: 149990,
-    stock: 4,
-    imagen: '/img/parlante2.jpg',
-  },
-];
-
-// Combinar álbumes formateados con los equipos base
-const todosLosProductosIniciales = [
-  ...albumes.map((alb) => ({
-    ...alb,
-    categoria: alb.categoria || 'vinilos',
-  })),
-  ...productosEquiposBase,
-];
+import React, { useState, useEffect } from 'react';
+import { api } from '../services/api';
 
 export const AdminProductos = () => {
-  // Carga inicial combinando datos base (álbumes + equipos) o desde localStorage
-  const [productos, setProductos] = useState(() => {
-    const guardados = localStorage.getItem('adminProductos');
-    return guardados ? JSON.parse(guardados) : todosLosProductosIniciales;
-  });
+  // Productos desde el backend
+  const [productos, setProductos] = useState([]);
+  const [error, setError] = useState('');
+
+  const cargarProductos = async () => {
+    try {
+      setProductos(await api.productos());
+      setError('');
+    } catch (e) {
+      setError(e.message);
+    }
+  };
+
+  useEffect(() => {
+    cargarProductos();
+  }, []);
 
   const [nuevoProd, setNuevoProd] = useState({
     titulo: '',
@@ -84,32 +28,34 @@ export const AdminProductos = () => {
   });
 
   // Guardar nuevo producto
-  const handleAgregar = (e) => {
+  const handleAgregar = async (e) => {
     e.preventDefault();
     if (!nuevoProd.titulo || !nuevoProd.precio) return;
 
-    const productoCreado = {
-      id: `prod-${Date.now()}`,
-      titulo: nuevoProd.titulo,
-      nombre: nuevoProd.titulo,
-      artista: nuevoProd.artista || 'Artista / Marca Varios',
-      precio: Number(nuevoProd.precio),
-      stock: Number(nuevoProd.stock) || 5,
-      imagen: nuevoProd.categoria === 'equipos' ? '/img/tornamesa.jpg' : '/img/tocadiscos.jpg',
-      categoria: nuevoProd.categoria,
-    };
-
-    const listaActualizada = [productoCreado, ...productos];
-    setProductos(listaActualizada);
-    localStorage.setItem('adminProductos', JSON.stringify(listaActualizada));
-    setNuevoProd({ titulo: '', artista: '', precio: '', stock: '', categoria: 'vinilos' });
+    try {
+      await api.crearProducto({
+        titulo: nuevoProd.titulo,
+        artista: nuevoProd.artista || 'Artista / Marca Varios',
+        precio: Number(nuevoProd.precio),
+        stock: Number(nuevoProd.stock) || 5,
+        imagen: nuevoProd.categoria === 'equipos' ? '/img/tornamesa.jpg' : '/img/tocadiscos.jpg',
+        categoria: nuevoProd.categoria,
+      });
+      await cargarProductos();
+      setNuevoProd({ titulo: '', artista: '', precio: '', stock: '', categoria: 'vinilos' });
+    } catch (e2) {
+      setError(e2.message);
+    }
   };
 
   // Eliminar producto
-  const handleEliminar = (id) => {
-    const listaFiltrada = productos.filter((p) => p.id !== id);
-    setProductos(listaFiltrada);
-    localStorage.setItem('adminProductos', JSON.stringify(listaFiltrada));
+  const handleEliminar = async (id) => {
+    try {
+      await api.eliminarProducto(id);
+      await cargarProductos();
+    } catch (e) {
+      setError(e.message);
+    }
   };
 
   return (
@@ -122,6 +68,8 @@ export const AdminProductos = () => {
         </div>
         <span className="badge bg-danger fs-6 px-3 py-2">{productos.length} Productos</span>
       </div>
+
+      {error && <div className="alert alert-danger">{error}</div>}
 
       {/* Formulario de Alta de Producto */}
       <form onSubmit={handleAgregar} className="bg-secondary bg-opacity-10 p-4 rounded-3 border border-secondary mb-4 row g-3 align-items-end shadow-sm">

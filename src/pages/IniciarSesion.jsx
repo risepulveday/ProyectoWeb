@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { api } from '../services/api';
 
 export const IniciarSesion = () => {
   const navigate = useNavigate();
@@ -15,44 +16,6 @@ export const IniciarSesion = () => {
     tipo: 'exito',
     mensaje: ''
   });
-
-  // Inicializar usuarios de prueba en localStorage (Administrador y Cliente base)
-  useEffect(() => {
-    const usuariosExistentes = JSON.parse(localStorage.getItem('usuariosApp'));
-    if (!usuariosExistentes) {
-      const usuariosBase = [
-        {
-          nombre: 'Administrador Principal',
-          run: '111111111',
-          correo: 'admin@duoc.cl',
-          password: 'admin',
-          rol: 'Administrador'
-        },
-        {
-          nombre: 'Administrador secundario',
-          run: '222222222',
-          correo: 'admin2@duoc.cl',
-          password: 'admin2',
-          rol: 'Administrador'
-        },
-        {
-          nombre: 'Cliente Ejemplo',
-          run: '444444444',
-          correo: 'cliente@gmail.com',
-          password: '1234',
-          rol: 'Cliente'
-        },
-        {
-          nombre: 'Cliente Ejemplo 2',
-          run: '33333333',
-          correo: 'cliente2@gmail.com',
-          password: '1234',
-          rol: 'Cliente'
-        }
-      ];
-      localStorage.setItem('usuariosApp', JSON.stringify(usuariosBase));
-    }
-  }, []);
 
   const handleChange = (e) => {
     const { id, value } = e.target;
@@ -91,7 +54,7 @@ export const IniciarSesion = () => {
     return Object.keys(nuevosErrores).length === 0;
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
 
     if (!validarFormulario()) {
@@ -99,29 +62,20 @@ export const IniciarSesion = () => {
       return;
     }
 
-    // Buscar el usuario en localStorage
-    const usuarios = JSON.parse(localStorage.getItem('usuariosApp')) || [];
-    const usuarioEncontrado = usuarios.find(
-      (u) =>
-        u.correo.toLowerCase() === formData.correo.trim().toLowerCase() &&
-        u.password === formData.password.trim()
-    );
+    try {
+      // El backend valida las credenciales y devuelve el usuario (sin contraseña)
+      const usuario = await api.login(formData.correo.trim(), formData.password.trim());
 
-    if (usuarioEncontrado) {
-      // Guardar la sesión activa
-      localStorage.setItem('usuarioSesion', JSON.stringify(usuarioEncontrado));
-      mostrarToast('exito', `¡Bienvenido ${usuarioEncontrado.nombre}!`);
+      // La sesión activa sigue guardándose en el navegador
+      localStorage.setItem('usuarioSesion', JSON.stringify(usuario));
+      mostrarToast('exito', `¡Bienvenido ${usuario.nombre}!`);
 
       // Redireccionar según el rol (Administrador -> /admin, Cliente -> /)
       setTimeout(() => {
-        if (usuarioEncontrado.rol === 'Administrador') {
-          navigate('/admin');
-        } else {
-          navigate('/');
-        }
+        navigate(usuario.rol === 'Administrador' ? '/admin' : '/');
       }, 1500);
-    } else {
-      mostrarToast('error', 'Correo o contraseña incorrectos.');
+    } catch (error) {
+      mostrarToast('error', error.message || 'Correo o contraseña incorrectos.');
     }
   };
 

@@ -1,59 +1,69 @@
 import { render, screen, fireEvent } from '@testing-library/react';
 import { BrowserRouter } from 'react-router-dom';
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { Categorias } from './Categorias';
+import { api } from '../services/api';
+
+vi.mock('../services/api', async (importOriginal) => {
+  const actual = await importOriginal();
+  return { ...actual, api: { ...actual.api, productos: vi.fn() } };
+});
+
+const productosMock = [
+  { id: 'alb-1', titulo: 'Naturaleza Muerta', artista: 'Ley 20 mil', categoria: 'vinilos', precio: 17990, imagen: '/img/Ley20mil.jpg' },
+  { id: 'eq-1', titulo: 'Amplificador de Guitarra Marshall', artista: 'Marshall', categoria: 'equipos', precio: 399990, imagen: '/img/amplificadorMarshall.jpg' },
+];
 
 // Wrapper para componentes que usan <Link> de react-router-dom
-const renderWithRouter = (ui) => {
-  return render(<BrowserRouter>{ui}</BrowserRouter>);
-};
+const renderWithRouter = (ui) => render(<BrowserRouter>{ui}</BrowserRouter>);
 
 describe('Pruebas Unitarias para Categorias', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    api.productos.mockResolvedValue(productosMock);
+  });
 
-  // 1. Renderizado correcto (Lista de productos)
-  it('debe renderizar el título de Categorías y los productos iniciales', () => {
+  // 1. Renderizado correcto (título y filtros)
+  it('debe renderizar el título de Categorías y los botones de filtro', async () => {
     renderWithRouter(<Categorias agregarAlCarrito={() => {}} />);
-    
-    // Verificar título principal
+
     expect(screen.getByRole('heading', { name: /CATEGORÍAS/i })).toBeInTheDocument();
-    
-    // Verificar que existen botones de filtro
     expect(screen.getByRole('button', { name: /Todas/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Vinilos/i })).toBeInTheDocument();
+
+    // Productos cargados desde la API
+    expect(await screen.findByText(/Naturaleza Muerta - Ley 20 mil/i)).toBeInTheDocument();
   });
 
   // 2. Renderizado condicional / Filtros
-  it('debe filtrar productos al hacer clic en el botón de la categoría "Equipos"', () => {
+  it('debe filtrar productos al hacer clic en el botón de la categoría "Equipos"', async () => {
     renderWithRouter(<Categorias agregarAlCarrito={() => {}} />);
+    await screen.findByText(/Naturaleza Muerta - Ley 20 mil/i);
 
-    const btnEquipos = screen.getByRole('button', { name: /^Equipos$/i });
-    fireEvent.click(btnEquipos);
+    fireEvent.click(screen.getByRole('button', { name: /^Equipos$/i }));
 
-    // Verificar que se renderiza un producto de la categoría equipos
     expect(screen.getByText(/Amplificador de Guitarra Marshall/i)).toBeInTheDocument();
+    expect(screen.queryByText(/Naturaleza Muerta/i)).not.toBeInTheDocument();
   });
 
   // 3. Pruebas de Props y Manejo de Eventos (onClick)
-  it('debe llamar a la función agregarAlCarrito al presionar "Añadir"', () => {
+  it('debe llamar a la función agregarAlCarrito al presionar "Añadir"', async () => {
     const mockAgregarAlCarrito = vi.fn();
     renderWithRouter(<Categorias agregarAlCarrito={mockAgregarAlCarrito} />);
 
-    // Buscar el primer botón "Añadir"
-    const botonesAñadir = screen.getAllByRole('button', { name: /Añadir/i });
+    const botonesAñadir = await screen.findAllByRole('button', { name: /Añadir/i });
     fireEvent.click(botonesAñadir[0]);
 
-    // Validar que la prop función fue ejecutada
     expect(mockAgregarAlCarrito).toHaveBeenCalledTimes(1);
   });
 
   // 4. Pruebas de Estado (Notificación Toast)
-  it('debe mostrar la notificación Toast tras añadir un producto', () => {
+  it('debe mostrar la notificación Toast tras añadir un producto', async () => {
     renderWithRouter(<Categorias agregarAlCarrito={() => {}} />);
 
-    const botonesAñadir = screen.getAllByRole('button', { name: /Añadir/i });
+    const botonesAñadir = await screen.findAllByRole('button', { name: /Añadir/i });
     fireEvent.click(botonesAñadir[0]);
 
-    // Verificar que el estado cambie y renderice la alerta Toast
     expect(screen.getByRole('alert')).toBeInTheDocument();
     expect(screen.getByText(/se agregó al carrito/i)).toBeInTheDocument();
   });

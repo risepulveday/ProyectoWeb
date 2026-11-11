@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
+import { api } from '../services/api';
 
 const datosRegiones = {
   'Coquimbo': ['La Serena', 'Coquimbo', 'Ovalle', 'Illapel', 'Vicuña'],
@@ -102,38 +103,25 @@ export const Registro = () => {
     return Object.keys(nuevosErrores).length === 0;
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
 
     if (validarFormulario()) {
-      // Leer usuarios guardados en localStorage
-      const usuariosActuales = JSON.parse(localStorage.getItem('usuariosApp')) || [];
-
-      // Verificar si el correo ya existe
-      const correoExiste = usuariosActuales.some(
-        (u) => u.correo.toLowerCase() === formData.correo.trim().toLowerCase()
-      );
-
-      if (correoExiste) {
-        mostrarToast('error', 'El correo ya se encuentra registrado.');
+      // Crear el usuario Cliente en el backend (el rol lo fija el servidor)
+      try {
+        await api.registro({
+          run: formData.run.trim(),
+          nombre: `${formData.nombre.trim()} ${formData.apellidos.trim()}`,
+          correo: formData.correo.trim(),
+          password: formData.password.trim(),
+          region: formData.region,
+          comuna: formData.comuna,
+          direccion: formData.direccion.trim()
+        });
+      } catch (error) {
+        mostrarToast('error', error.message || 'El usuario no se pudo crear');
         return;
       }
-
-      // Crear objeto del nuevo usuario Cliente
-      const nuevoCliente = {
-        run: formData.run.trim(),
-        nombre: `${formData.nombre.trim()} ${formData.apellidos.trim()}`,
-        correo: formData.correo.trim(),
-        password: formData.password.trim(),
-        region: formData.region,
-        comuna: formData.comuna,
-        direccion: formData.direccion.trim(),
-        rol: 'Cliente' // Rol por defecto
-      };
-
-      // Guardar en localStorage
-      usuariosActuales.push(nuevoCliente);
-      localStorage.setItem('usuariosApp', JSON.stringify(usuariosActuales));
 
       // Mostrar mensaje de éxito
       mostrarToast('exito', 'Usuario creado correctamente');

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { blogData as initialBlogData } from './Blog';
+import { api } from '../services/api';
 
 export const AdminBlogs = () => {
   const [blogs, setBlogs] = useState([]);
@@ -21,31 +21,12 @@ export const AdminBlogs = () => {
     cargarBlogs();
   }, []);
 
-  const cargarBlogs = () => {
-    const blogsGuardados = JSON.parse(localStorage.getItem('blogsApp'));
-    if (!blogsGuardados || blogsGuardados.length === 0) {
-      const datosIniciales = initialBlogData.map((b) => ({
-        id: b.id,
-        title: b.title,
-        subtitle: b.subtitle || '',
-        fecha: b.fecha,
-        autor: b.autor || 'Redacción MusicMania',
-        summary: typeof b.summary === 'string' ? b.summary : b.title,
-        image: b.image || '/img/cancion_corta.jpg',
-        contenidoExtendido: Array.isArray(b.contenidoExtendido)
-          ? b.contenidoExtendido.join('\n\n')
-          : b.contenidoExtendido || ''
-      }));
-      localStorage.setItem('blogsApp', JSON.stringify(datosIniciales));
-      setBlogs(datosIniciales);
-    } else {
-      setBlogs(blogsGuardados);
+  const cargarBlogs = async () => {
+    try {
+      setBlogs(await api.blogs());
+    } catch (error) {
+      setErrorForm(error.message);
     }
-  };
-
-  const guardarEnLocalStorage = (nuevaLista) => {
-    setBlogs(nuevaLista);
-    localStorage.setItem('blogsApp', JSON.stringify(nuevaLista));
   };
 
   const handleInputChange = (e) => {
@@ -66,43 +47,44 @@ export const AdminBlogs = () => {
     setModalNuevo(true);
   };
 
-  const handleCrearBlog = (e) => {
+  const handleCrearBlog = async (e) => {
     e.preventDefault();
     if (!formData.title.trim() || !formData.summary.trim() || !formData.contenidoExtendido.trim()) {
       setErrorForm('Por favor completa todos los campos obligatorios (*).');
       return;
     }
 
-    const opcionesFecha = { year: 'numeric', month: 'long', day: '2-digit' };
-    const fechaActual = new Date().toLocaleDateString('es-CL', opcionesFecha);
-
-    const nuevoBlogObj = {
-      id: `blog-${Date.now()}`,
-      title: formData.title.trim(),
-      subtitle: formData.subtitle.trim(),
-      fecha: fechaActual,
-      autor: formData.autor.trim() || 'Redacción MusicMania',
-      summary: formData.summary.trim(),
-      image: formData.image.trim() || '/img/cancion_corta.jpg',
-      contenidoExtendido: formData.contenidoExtendido.trim()
-    };
-
-    const listaActualizada = [nuevoBlogObj, ...blogs];
-    guardarEnLocalStorage(listaActualizada);
-    setModalNuevo(false);
+    try {
+      await api.crearBlog({
+        title: formData.title.trim(),
+        subtitle: formData.subtitle.trim(),
+        autor: formData.autor.trim() || 'Redacción MusicMania',
+        summary: formData.summary.trim(),
+        image: formData.image.trim() || '/img/cancion_corta.jpg',
+        contenidoExtendido: formData.contenidoExtendido.trim()
+      });
+      await cargarBlogs();
+      setModalNuevo(false);
+    } catch (error) {
+      setErrorForm(error.message);
+    }
   };
 
-  const handleEliminarBlog = (idBlog) => {
+  const handleEliminarBlog = async (idBlog) => {
     if (window.confirm('¿Estás seguro de que deseas eliminar esta publicación del blog?')) {
-      const listaActualizada = blogs.filter((b) => b.id !== idBlog);
-      guardarEnLocalStorage(listaActualizada);
+      try {
+        await api.eliminarBlog(idBlog);
+        await cargarBlogs();
+      } catch (error) {
+        alert(error.message);
+      }
     }
   };
 
   const blogsFiltrados = blogs.filter(
     (b) =>
-      b.title.toLowerCase().includes(busqueda.toLowerCase()) ||
-      b.autor.toLowerCase().includes(busqueda.toLowerCase())
+      (b.title || '').toLowerCase().includes(busqueda.toLowerCase()) ||
+      (b.autor || '').toLowerCase().includes(busqueda.toLowerCase())
   );
 
   return (

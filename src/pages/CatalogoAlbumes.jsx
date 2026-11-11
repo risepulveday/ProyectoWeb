@@ -1,31 +1,19 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { albumes as albumesBase } from '../data/albumesData';
+import { api } from '../services/api';
 import { AlbumCard } from '../components/AlbumCard';
 
 export const CatalogoAlbumes = ({ agregarAlCarrito }) => {
   const [toast, setToast] = useState('');
 
-  // Sincronización con productos creados/editados en Admin
-  const [listaProductos, setListaProductos] = useState(() => {
-    const productosAdmin = localStorage.getItem('adminProductos');
-    if (productosAdmin) {
-      const parsed = JSON.parse(productosAdmin);
-      const vinilos = parsed.filter(p => !p.categoria || p.categoria === 'vinilos');
-      return vinilos.length > 0 ? vinilos : albumesBase;
-    }
-    return albumesBase;
-  });
+  // Vinilos desde el backend
+  const [listaProductos, setListaProductos] = useState([]);
+  const [error, setError] = useState('');
 
   useEffect(() => {
-    const productosAdmin = localStorage.getItem('adminProductos');
-    if (productosAdmin) {
-      const parsed = JSON.parse(productosAdmin);
-      const vinilos = parsed.filter(p => !p.categoria || p.categoria === 'vinilos');
-      if (vinilos.length > 0) {
-        setListaProductos(vinilos);
-      }
-    }
+    api.productos('vinilos')
+      .then(setListaProductos)
+      .catch((e) => setError(e.message));
   }, []);
 
   const handleAgregar = (album) => {
@@ -73,6 +61,8 @@ export const CatalogoAlbumes = ({ agregarAlCarrito }) => {
 
       <div className="container">
         <h1 className="text-center mb-5 fw-bold text-white text-uppercase">Catálogo de Álbumes</h1>
+
+        {error && <div className="alert alert-danger text-center">{error}</div>}
 
         {/* Grid de Productos */}
         <div className="row g-4 mb-5">

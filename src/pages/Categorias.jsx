@@ -1,108 +1,19 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { albumes } from '../data/albumesData';
-
-const productosEquiposBase = [
-  {
-    id: 'eq-1',
-    categoria: 'equipos',
-    nombre: 'Amplificador de Guitarra Marshall',
-    precio: 399990,
-    imagen: '/img/amplificadorMarshall.jpg',
-  },
-  {
-    id: 'eq-2',
-    categoria: 'equipos',
-    nombre: 'Micrófono de Condensador',
-    precio: 149990,
-    imagen: '/img/microfonopro.jpg',
-  },
-  {
-    id: 'eq-3',
-    categoria: 'equipos',
-    nombre: 'Controladora DJ Pro',
-    precio: 399990,
-    imagen: '/img/tornamesa.jpg',
-  },
-  {
-    id: 'eq-4',
-    categoria: 'equipos',
-    nombre: 'Parlante de P.A. Profesional',
-    precio: 199990,
-    imagen: '/img/parlantejbl.jpg',
-  },
-  {
-    id: 'eq-5',
-    categoria: 'equipos',
-    nombre: 'Tornamesa Estéreo Retro Hi-Fi',
-    precio: 99990,
-    imagen: '/img/tocadiscos.jpg',
-  },
-  {
-    id: 'eq-6',
-    categoria: 'equipos',
-    nombre: 'Parlantes Monitor Audio Bronze',
-    precio: 149990,
-    imagen: '/img/parlante2.jpg',
-  },
-];
-
-const productosAccesoriosBase = [
-  {
-    id: 'acc-1',
-    categoria: 'accesorios',
-    nombre: 'Limpiador de Vinilos v1',
-    precio: 15990,
-    imagen: '/img/limpiadorVinilos.jpg',
-  },
-  {
-    id: 'acc-2',
-    categoria: 'accesorios',
-    nombre: 'Limpiador de Vinilos Pro',
-    precio: 17990,
-    imagen: '/img/Limpiavinilo2.jpg',
-  },
-];
+import { api, normalizarProducto } from '../services/api';
 
 export const Categorias = ({ agregarAlCarrito }) => {
   const [categoriaSeleccionada, setCategoriaSeleccionada] = useState('todas');
   const [toast, setToast] = useState('');
 
-  // Sincronización dinámica de productos desde localStorage o listas base
-  const [todosLosProductos, setTodosLosProductos] = useState(() => {
-    const productosAdmin = localStorage.getItem('adminProductos');
-    if (productosAdmin) {
-      const parsed = JSON.parse(productosAdmin);
-      return parsed.map((p) => ({
-        ...p,
-        nombre: p.nombre || p.titulo,
-        categoria: p.categoria || (String(p.id).startsWith('eq-') ? 'equipos' : String(p.id).startsWith('acc-') ? 'accesorios' : 'vinilos'),
-      }));
-    }
-
-    const vinilosFormateados = albumes.map((alb) => ({
-      id: alb.id,
-      categoria: 'vinilos',
-      nombre: alb.titulo ? `${alb.titulo} - ${alb.artista}` : alb.nombre,
-      precio: alb.precio,
-      imagen: alb.imagen,
-      ...alb,
-    }));
-
-    return [...vinilosFormateados, ...productosEquiposBase, ...productosAccesoriosBase];
-  });
+  // Productos desde el backend
+  const [todosLosProductos, setTodosLosProductos] = useState([]);
+  const [error, setError] = useState('');
 
   useEffect(() => {
-    const productosAdmin = localStorage.getItem('adminProductos');
-    if (productosAdmin) {
-      const parsed = JSON.parse(productosAdmin);
-      const formateados = parsed.map((p) => ({
-        ...p,
-        nombre: p.nombre || p.titulo,
-        categoria: p.categoria || (String(p.id).startsWith('eq-') ? 'equipos' : String(p.id).startsWith('acc-') ? 'accesorios' : 'vinilos'),
-      }));
-      setTodosLosProductos(formateados);
-    }
+    api.productos()
+      .then((lista) => setTodosLosProductos(lista.map(normalizarProducto)))
+      .catch((e) => setError(e.message));
   }, []);
 
   // Filtrar según la categoría seleccionada
@@ -147,6 +58,8 @@ export const Categorias = ({ agregarAlCarrito }) => {
       )}
 
       <h1 className="text-center fw-bold mb-4 text-uppercase">CATEGORÍAS</h1>
+
+      {error && <div className="alert alert-danger text-center">{error}</div>}
 
       {/* Botones de Filtro */}
       <div className="d-flex justify-content-center gap-2 mb-5 flex-wrap">

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { api, formatearFecha } from '../services/api';
 
 export const AdminUsuarios = () => {
   // ESTADOS PRINCIPALES
@@ -10,6 +11,8 @@ export const AdminUsuarios = () => {
   const [modalNuevo, setModalNuevo] = useState(false);
   const [modalEditar, setModalEditar] = useState(null);
   const [modalHistorial, setModalHistorial] = useState(null);
+  const [historial, setHistorial] = useState([]);
+  const [errorCarga, setErrorCarga] = useState('');
 
   // FORMULARIO NUEVO / EDITAR
   const [formData, setFormData] = useState({
@@ -21,19 +24,18 @@ export const AdminUsuarios = () => {
   });
   const [errorForm, setErrorForm] = useState('');
 
-  // CARGAR USUARIOS DESDE LOCALSTORAGE
+  // CARGAR USUARIOS DESDE EL BACKEND
   useEffect(() => {
     cargarUsuarios();
   }, []);
 
-  const cargarUsuarios = () => {
-    const usuariosGuardados = JSON.parse(localStorage.getItem('usuariosApp')) || [];
-    setUsuarios(usuariosGuardados);
-  };
-
-  const guardarEnLocalStorage = (nuevaLista) => {
-    setUsuarios(nuevaLista);
-    localStorage.setItem('usuariosApp', JSON.stringify(nuevaLista));
+  const cargarUsuarios = async () => {
+    try {
+      setUsuarios(await api.usuarios());
+      setErrorCarga('');
+    } catch (error) {
+      setErrorCarga(error.message);
+    }
   };
 
   // MANEJO DE FORMULARIO
@@ -50,22 +52,20 @@ export const AdminUsuarios = () => {
   };
 
   // GUARDAR NUEVO USUARIO
-  const handleCrearUsuario = (e) => {
+  const handleCrearUsuario = async (e) => {
     e.preventDefault();
     if (!formData.nombre.trim() || !formData.correo.trim() || !formData.password.trim()) {
       setErrorForm('Por favor completa todos los campos obligatorios.');
       return;
     }
 
-    const existe = usuarios.some((u) => u.correo.toLowerCase() === formData.correo.trim().toLowerCase());
-    if (existe) {
-      setErrorForm('El correo ingresado ya se encuentra registrado.');
-      return;
+    try {
+      await api.crearUsuario({ ...formData, correo: formData.correo.trim().toLowerCase() });
+      await cargarUsuarios();
+      setModalNuevo(false);
+    } catch (error) {
+      setErrorForm(error.message);
     }
-
-    const nuevaLista = [...usuarios, { ...formData, correo: formData.correo.trim().toLowerCase() }];
-    guardarEnLocalStorage(nuevaLista);
-    setModalNuevo(false);
   };
 
   // ABRIR MODAL EDITAR
@@ -75,48 +75,49 @@ export const AdminUsuarios = () => {
       nombre: user.nombre,
       run: user.run || '',
       correo: user.correo,
-      password: user.password || '',
+      password: '',
       rol: user.rol
     });
     setErrorForm('');
   };
 
   // GUARDAR CAMBIOS DE EDICIÓN
-  const handleGuardarEdicion = (e) => {
+  const handleGuardarEdicion = async (e) => {
     e.preventDefault();
     if (!formData.nombre.trim() || !formData.correo.trim()) {
       setErrorForm('El nombre y el correo no pueden estar vacíos.');
       return;
     }
 
-    const nuevaLista = usuarios.map((u) => {
-      if (u.correo.toLowerCase() === modalEditar.correo.toLowerCase()) {
-        return {
-          ...u,
-          nombre: formData.nombre.trim(),
-          run: formData.run.trim(),
-          correo: formData.correo.trim().toLowerCase(),
-          password: formData.password ? formData.password.trim() : u.password,
-          rol: formData.rol
-        };
-      }
-      return u;
-    });
-
-    guardarEnLocalStorage(nuevaLista);
-    setModalEditar(null);
+    try {
+      await api.actualizarUsuario(modalEditar.id, {
+        nombre: formData.nombre.trim(),
+        run: formData.run.trim(),
+        correo: formData.correo.trim().toLowerCase(),
+        password: formData.password.trim(), // vacío = no cambia
+        rol: formData.rol
+      });
+      await cargarUsuarios();
+      setModalEditar(null);
+    } catch (error) {
+      setErrorForm(error.message);
+    }
   };
 
   // ELIMINAR USUARIO
-  const handleEliminarUsuario = (correoEliminar) => {
-    if (correoEliminar.toLowerCase() === 'admin@duoc.cl') {
+  const handleEliminarUsuario = async (usuario) => {
+    if (usuario.correo.toLowerCase() === 'admin@duoc.cl') {
       alert('No se puede eliminar la cuenta del Administrador Principal.');
       return;
     }
 
-    if (window.confirm(`¿Estás seguro de que deseas eliminar al usuario ${correoEliminar}?`)) {
-      const nuevaLista = usuarios.filter((u) => u.correo.toLowerCase() !== correoEliminar.toLowerCase());
-      guardarEnLocalStorage(nuevaLista);
+    if (window.confirm(`¿Estás seguro de que deseas eliminar al usuario ${usuario.correo}?`)) {
+      try {
+        await api.eliminarUsuario(usuario.id);
+        await cargarUsuarios();
+      } catch (error) {
+        alert(error.message);
+      }
     }
   };
 
@@ -132,12 +133,15 @@ export const AdminUsuarios = () => {
     return coincideBusqueda && coincideRol;
   });
 
-  // OBTENER HISTORIAL REAL DE COMPRAS DESDE LOCALSTORAGE ('ordenesApp')
-  const obtenerHistorialCliente = (correoCliente) => {
-    const todasLasOrdenes = JSON.parse(localStorage.getItem('ordenesApp')) || [];
-    return todasLasOrdenes.filter(
-      (orden) => orden.correo && orden.correo.toLowerCase() === correoCliente.toLowerCase()
-    );
+  // HISTORIAL DE COMPRAS DESDE EL BACKEND (órdenes filtradas por correo)
+  const handleAbrirHistorial = async (usuario) => {
+    setModalHistorial(usuario);
+    setHistorial([]);
+    try {
+      setHistorial(await api.ordenes(usuario.correo));
+    } catch {
+      setHistorial([]);
+    }
   };
 
   return (
@@ -157,6 +161,8 @@ export const AdminUsuarios = () => {
           <span>Nuevo Usuario</span>
         </button>
       </div>
+
+      {errorCarga && <div className="alert alert-danger">{errorCarga}</div>}
 
       {/* BÚSQUEDA Y FILTROS */}
       <div className="row g-3 mb-4">
@@ -204,7 +210,7 @@ export const AdminUsuarios = () => {
             <tbody>
               {usuariosFiltrados.length > 0 ? (
                 usuariosFiltrados.map((u, i) => (
-                  <tr key={i}>
+                  <tr key={u.id}>
                     <td>
                       <div className="d-flex align-items-center gap-3">
                         <div
@@ -248,7 +254,7 @@ export const AdminUsuarios = () => {
                         {/* HISTORIAL DE COMPRAS (SÓLO PARA CLIENTES) */}
                         {u.rol === 'Cliente' && (
                           <button
-                            onClick={() => setModalHistorial(u)}
+                            onClick={() => handleAbrirHistorial(u)}
                             className="btn btn-sm btn-outline-info fw-bold d-flex align-items-center gap-1"
                             title="Ver historial de compras"
                           >
@@ -259,7 +265,7 @@ export const AdminUsuarios = () => {
 
                         {/* ELIMINAR USUARIO */}
                         <button
-                          onClick={() => handleEliminarUsuario(u.correo)}
+                          onClick={() => handleEliminarUsuario(u)}
                           className="btn btn-sm btn-outline-danger"
                           title="Eliminar usuario"
                           disabled={u.correo.toLowerCase() === 'admin@duoc.cl'}
@@ -511,7 +517,7 @@ export const AdminUsuarios = () => {
 
                 <h6 className="fw-bold text-uppercase mb-3 text-secondary">Órdenes Registradas</h6>
 
-                {obtenerHistorialCliente(modalHistorial.correo).length > 0 ? (
+                {historial.length > 0 ? (
                   <div className="table-responsive">
                     <table className="table table-dark table-striped align-middle mb-0">
                       <thead>
@@ -524,14 +530,14 @@ export const AdminUsuarios = () => {
                         </tr>
                       </thead>
                       <tbody>
-                        {obtenerHistorialCliente(modalHistorial.correo).map((compra) => (
+                        {historial.map((compra) => (
                           <tr key={compra.id}>
-                            <td className="fw-bold text-info">{compra.id}</td>
-                            <td className="small">{compra.fecha}</td>
+                            <td className="fw-bold text-info">{compra.codigo}</td>
+                            <td className="small">{formatearFecha(compra.fecha)}</td>
                             <td className="small">
-                              {compra.productos
+                              {compra.productos && compra.productos.length > 0
                                 ? compra.productos.map((p) => `${p.cantidad}x ${p.nombre}`).join(', ')
-                                : compra.items || 'Sin detalle'}
+                                : 'Sin detalle'}
                             </td>
                             <td className="fw-bold text-success">${compra.total.toLocaleString('es-CL')}</td>
                             <td>

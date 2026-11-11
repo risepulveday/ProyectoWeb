@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { api, formatearFecha } from '../services/api';
 
 export const AdminOrdenes = () => {
   const [ordenes, setOrdenes] = useState([]);
@@ -8,64 +9,19 @@ export const AdminOrdenes = () => {
   const [modalDetalle, setModalDetalle] = useState(null);
   const [modalEstado, setModalEstado] = useState(null);
   const [nuevoEstado, setNuevoEstado] = useState('');
+  const [errorCarga, setErrorCarga] = useState('');
 
   useEffect(() => {
     cargarOrdenes();
   }, []);
 
-  const cargarOrdenes = () => {
-    // 1. Obtener usuarios reales de localStorage
-    const usuariosRegistrados = JSON.parse(localStorage.getItem('usuariosApp')) || [];
-    const clientesReales = usuariosRegistrados.filter((u) => u.rol === 'Cliente');
-
-    // 2. Obtener órdenes existentes
-    let ordenesGuardadas = JSON.parse(localStorage.getItem('ordenesApp'));
-
-    if (!ordenesGuardadas || ordenesGuardadas.length === 0) {
-      // Si no existen órdenes, generamos boletas de prueba asociadas a los clientes reales
-      const cliente1 = clientesReales[0] || { nombre: 'Cliente Ejemplo', correo: 'cliente@gmail.com', run: '22222222-2' };
-      const cliente2 = clientesReales[1] || { nombre: 'Cliente Ejemplo 2', correo: 'cliente2@gmail.com', run: '33333333-3' };
-
-      ordenesGuardadas = [
-        {
-          id: 'BOL-2026-101',
-          fecha: '2026-10-08 14:30',
-          cliente: cliente1.nombre,
-          correo: cliente1.correo,
-          rut: cliente1.run || '18.452.123-K',
-          direccion: 'Av. Alemania 1234, Depto 402, Valparaíso',
-          metodoPago: 'WebPay (Tarjeta Crédito)',
-          estado: 'Entregado',
-          total: 45990,
-          productos: [
-            { id: 1, nombre: 'Vinyl Album - Rap con R de Revolución', precio: 25990, cantidad: 1 },
-            { id: 2, nombre: 'Audífonos Dj Monitor Pro', precio: 20000, cantidad: 1 }
-          ]
-        },
-        {
-          id: 'BOL-2026-102',
-          fecha: '2026-10-09 09:15',
-          cliente: cliente2.nombre,
-          correo: cliente2.correo,
-          rut: cliente2.run || '15.892.441-2',
-          direccion: 'Calle Los Carrera 560, Viña del Mar',
-          metodoPago: 'Transferencia Bancaria',
-          estado: 'Enviado',
-          total: 32980,
-          productos: [
-            { id: 3, nombre: 'Vinyl Album - Naturaleza Muerta', precio: 32980, cantidad: 1 }
-          ]
-        }
-      ];
-      localStorage.setItem('ordenesApp', JSON.stringify(ordenesGuardadas));
+  const cargarOrdenes = async () => {
+    try {
+      setOrdenes(await api.ordenes());
+      setErrorCarga('');
+    } catch (error) {
+      setErrorCarga(error.message);
     }
-
-    setOrdenes(ordenesGuardadas);
-  };
-
-  const guardarEnLocalStorage = (nuevaLista) => {
-    setOrdenes(nuevaLista);
-    localStorage.setItem('ordenesApp', JSON.stringify(nuevaLista));
   };
 
   const handleAbrirCambioEstado = (orden) => {
@@ -73,27 +29,35 @@ export const AdminOrdenes = () => {
     setNuevoEstado(orden.estado);
   };
 
-  const handleGuardarNuevoEstado = (e) => {
+  const handleGuardarNuevoEstado = async (e) => {
     e.preventDefault();
     if (!modalEstado || !nuevoEstado) return;
 
-    const nuevaLista = ordenes.map((o) => (o.id === modalEstado.id ? { ...o, estado: nuevoEstado } : o));
-    guardarEnLocalStorage(nuevaLista);
-    setModalEstado(null);
+    try {
+      await api.cambiarEstadoOrden(modalEstado.id, nuevoEstado);
+      await cargarOrdenes();
+      setModalEstado(null);
+    } catch (error) {
+      alert(error.message);
+    }
   };
 
-  const handleEliminarOrden = (idOrden) => {
-    if (window.confirm(`¿Estás seguro de cancelar/eliminar la orden ${idOrden}?`)) {
-      const nuevaLista = ordenes.filter((o) => o.id !== idOrden);
-      guardarEnLocalStorage(nuevaLista);
+  const handleEliminarOrden = async (orden) => {
+    if (window.confirm(`¿Estás seguro de cancelar/eliminar la orden ${orden.codigo}?`)) {
+      try {
+        await api.eliminarOrden(orden.id);
+        await cargarOrdenes();
+      } catch (error) {
+        alert(error.message);
+      }
     }
   };
 
   const ordenesFiltradas = ordenes.filter((o) => {
     const coincideBusqueda =
-      o.id.toLowerCase().includes(busqueda.toLowerCase()) ||
-      o.cliente.toLowerCase().includes(busqueda.toLowerCase()) ||
-      o.correo.toLowerCase().includes(busqueda.toLowerCase());
+      (o.codigo || '').toLowerCase().includes(busqueda.toLowerCase()) ||
+      (o.cliente || '').toLowerCase().includes(busqueda.toLowerCase()) ||
+      (o.correo || '').toLowerCase().includes(busqueda.toLowerCase());
 
     const coincideEstado = filtroEstado === 'Todos' || o.estado === filtroEstado;
     return coincideBusqueda && coincideEstado;
@@ -129,6 +93,8 @@ export const AdminOrdenes = () => {
           <p className="text-secondary mb-0">Seguimiento de ventas y actualización de estados vinculados a los clientes.</p>
         </div>
       </div>
+
+      {errorCarga && <div className="alert alert-danger">{errorCarga}</div>}
 
       {/* KPIS */}
       <div className="row g-3 mb-4">
@@ -225,8 +191,8 @@ export const AdminOrdenes = () => {
                 ordenesFiltradas.map((o) => (
                   <tr key={o.id}>
                     <td>
-                      <span className="fw-bold text-info d-block">{o.id}</span>
-                      <small className="text-muted fs-7">{o.fecha}</small>
+                      <span className="fw-bold text-info d-block">{o.codigo}</span>
+                      <small className="text-muted fs-7">{formatearFecha(o.fecha)}</small>
                     </td>
                     <td>
                       <span className="fw-bold d-block text-light">{o.cliente}</span>
@@ -254,7 +220,7 @@ export const AdminOrdenes = () => {
                           <i className="bi bi-arrow-repeat"></i>
                         </button>
                         <button
-                          onClick={() => handleEliminarOrden(o.id)}
+                          onClick={() => handleEliminarOrden(o)}
                           className="btn btn-sm btn-outline-danger"
                           title="Eliminar orden"
                         >
@@ -283,7 +249,7 @@ export const AdminOrdenes = () => {
             <div className="modal-content bg-dark text-light border border-secondary shadow-lg">
               <div className="modal-header border-bottom border-secondary">
                 <h5 className="modal-title fw-bold text-uppercase text-info">
-                  <i className="bi bi-receipt me-2"></i>Detalle Orden {modalDetalle.id}
+                  <i className="bi bi-receipt me-2"></i>Detalle Orden {modalDetalle.codigo}
                 </h5>
                 <button type="button" className="btn-close btn-close-white" onClick={() => setModalDetalle(null)}></button>
               </div>
@@ -350,7 +316,7 @@ export const AdminOrdenes = () => {
             <div className="modal-content bg-dark text-light border border-secondary shadow-lg">
               <div className="modal-header border-bottom border-secondary">
                 <h5 className="modal-title fw-bold text-uppercase text-warning">
-                  <i className="bi bi-arrow-repeat me-2"></i>Estado Boleta {modalEstado.id}
+                  <i className="bi bi-arrow-repeat me-2"></i>Estado Boleta {modalEstado.codigo}
                 </h5>
                 <button type="button" className="btn-close btn-close-white" onClick={() => setModalEstado(null)}></button>
               </div>

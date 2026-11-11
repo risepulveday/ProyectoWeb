@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import initialResenasComunidad from '../data/resenasComunidad.json';
+import { api } from '../services/api';
 
 export const resenasData = [
   {
@@ -142,11 +142,14 @@ export const resenasData = [
 ];
 
 export const Resenas = () => {
-  // Cargar reseñas comunitarias desde localStorage o JSON inicial
-  const [todasLasResenas] = useState(() => {
-    const guardadas = localStorage.getItem('resenasComunidad');
-    return guardadas ? JSON.parse(guardadas) : initialResenasComunidad;
-  });
+  // Cargar reseñas comunitarias desde el backend
+  const [todasLasResenas, setTodasLasResenas] = useState([]);
+
+  useEffect(() => {
+    api.resenas()
+      .then(setTodasLasResenas)
+      .catch(() => setTodasLasResenas([]));
+  }, []);
 
   return (
     <main className="py-5 bg-dark text-light">

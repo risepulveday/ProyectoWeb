@@ -1,12 +1,31 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { blogData } from './blog';
+import { api } from '../services/api';
 
 export const DetalleBlog = () => {
   const { id } = useParams();
   
-  // Buscar la noticia según el id ingresado en la URL
-  const noticia = blogData.find((item) => item.id === id);
+  // Buscar la noticia en el backend según el id de la URL
+  const [noticia, setNoticia] = useState(null);
+  const [cargando, setCargando] = useState(true);
+
+  useEffect(() => {
+    let activo = true;
+    setCargando(true);
+    api.blog(id)
+      .then((n) => { if (activo) setNoticia(n); })
+      .catch(() => { if (activo) setNoticia(null); })
+      .finally(() => { if (activo) setCargando(false); });
+    return () => { activo = false; };
+  }, [id]);
+
+  if (cargando) {
+    return (
+      <div className="container py-5 text-center text-light">
+        <p>Cargando noticia...</p>
+      </div>
+    );
+  }
 
   // Si el id no existe en los datos
   if (!noticia) {
@@ -43,7 +62,7 @@ export const DetalleBlog = () => {
 
           {/* Imagen Principal de la Noticia */}
           <img
-            src={`/${noticia.image}`}
+            src={noticia.image && !noticia.image.startsWith('/') && !noticia.image.startsWith('http') ? `/${noticia.image}` : noticia.image}
             alt={noticia.title}
             className="img-fluid rounded w-100 mb-4 object-fit-cover shadow-sm"
             style={{ maxHeight: '420px' }}
@@ -51,7 +70,7 @@ export const DetalleBlog = () => {
 
           {/* Párrafos del Contenido Extendido */}
           <div className="lh-lg text-light fs-5">
-            {noticia.contenidoExtendido.map((parrafo, index) => (
+            {(noticia.contenidoExtendido || '').split(/\n\s*\n/).filter(Boolean).map((parrafo, index) => (
               <p key={index} className="mb-4">{parrafo}</p>
             ))}
           </div>

@@ -1,12 +1,22 @@
 import { render, screen } from '@testing-library/react';
 import { BrowserRouter } from 'react-router-dom';
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { Resenas } from './Resena';
+import { api } from '../services/api';
+
+vi.mock('../services/api', async (importOriginal) => {
+  const actual = await importOriginal();
+  return { ...actual, api: { ...actual.api, resenas: vi.fn() } };
+});
 
 const renderWithRouter = (ui) => render(<BrowserRouter>{ui}</BrowserRouter>);
 
 describe('Prueba Unitaria - Vista Resenas', () => {
-  it('debe renderizar el título principal y la lista de reseñas de álbumes', () => {
+  beforeEach(() => {
+    api.resenas.mockResolvedValue([]);
+  });
+
+  it('debe renderizar el título principal y la lista de reseñas de álbumes', async () => {
     renderWithRouter(<Resenas />);
 
     // Verificar encabezado de la página
@@ -18,5 +28,8 @@ describe('Prueba Unitaria - Vista Resenas', () => {
 
     const elementosKaseo = screen.getAllByText(/Kase.O/i);
     expect(elementosKaseo.length).toBeGreaterThan(0);
+
+    // Las reseñas de la comunidad se piden a la API
+    expect(api.resenas).toHaveBeenCalled();
   });
 });

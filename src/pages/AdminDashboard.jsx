@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { api } from '../services/api';
 import { AdminNavbar } from '../components/AdminNavbar';
 import { AdminUsuarios } from './AdminUsuarios';
 import { AdminOrdenes } from './AdminOrdenes';
@@ -46,23 +47,23 @@ export const AdminDashboard = () => {
     }
   }, [navigate]);
 
-  // ACTUALIZAR MÉTRICAS GENERALES DESDE LOCALSTORAGE
-  const actualizarMetricas = () => {
-    // 1. Usuarios
-    const usuariosGuardados = JSON.parse(localStorage.getItem('usuariosApp')) || [];
-    const clientes = usuariosGuardados.filter((u) => u.rol === 'Cliente').length;
-    const admins = usuariosGuardados.filter((u) => u.rol === 'Administrador').length;
+  // ACTUALIZAR MÉTRICAS GENERALES DESDE EL BACKEND
+  const actualizarMetricas = async () => {
+    try {
+      // 1. Usuarios
+      const usuariosGuardados = await api.usuarios();
+      setMetricasUsuarios({
+        total: usuariosGuardados.length,
+        clientes: usuariosGuardados.filter((u) => u.rol === 'Cliente').length,
+        admins: usuariosGuardados.filter((u) => u.rol === 'Administrador').length
+      });
 
-    setMetricasUsuarios({
-      total: usuariosGuardados.length,
-      clientes,
-      admins
-    });
-
-    // 2. Órdenes / Ventas
-    const ordenesGuardadas = JSON.parse(localStorage.getItem('ordenesApp')) || [];
-    const ventasCalculadas = ordenesGuardadas.reduce((acc, curr) => acc + (curr.total || 0), 0);
-    setTotalVentas(ventasCalculadas);
+      // 2. Órdenes / Ventas
+      const ordenesGuardadas = await api.ordenes();
+      setTotalVentas(ordenesGuardadas.reduce((acc, curr) => acc + (curr.total || 0), 0));
+    } catch {
+      // Si el backend no responde se mantienen las métricas anteriores
+    }
   };
 
   useEffect(() => {
